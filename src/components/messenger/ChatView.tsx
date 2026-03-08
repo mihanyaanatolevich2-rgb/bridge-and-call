@@ -708,8 +708,7 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
       )}
 
       {/* Messages */}
-      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-2 flex flex-col justify-end" style={{ minHeight: 0 }}>
-        <div className="flex-1" />
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-2" style={{ minHeight: 0 }}>
         {visibleMessages.map(renderMessage)}
         <div ref={messagesEndRef} />
       </div>
