@@ -375,6 +375,114 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const loadForwardTargets = async () => {
+    if (!user) return;
+
+    const { data: myParts } = await supabase
+      .from('conversation_participants')
+      .select('conversation_id')
+      .eq('user_id', user.id);
+
+    if (!myParts?.length) {
+      setForwardTargets([]);
+      return;
+    }
+
+    const conversationIds = Array.from(new Set(myParts.map((part) => part.conversation_id)));
+
+    const [{ data: conversations }, { data: allParts }] = await Promise.all([
+      supabase
+        .from('conversations')
+        .select('id, name, is_group')
+        .in('id', conversationIds),
+      supabase
+        .from('conversation_participants')
+        .select('conversation_id, user_id')
+        .in('conversation_id', conversationIds),
+    ]);
+
+    const directPartnerIds = Array.from(
+      new Set((allParts || []).filter((part) => part.user_id !== user.id).map((part) => part.user_id)),
+    );
+
+    const profileMap = new Map<string, { display_name: string | null; username: string; avatar_url: string | null }>();
+
+    if (directPartnerIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('user_id, display_name, username, avatar_url')
+        .in('user_id', directPartnerIds);
+
+      for (const profile of profiles || []) {
+        profileMap.set(profile.user_id, profile);
+      }
+    }
+
+    const targets: ForwardTarget[] = (conversations || []).map((conversation) => {
+      if (conversation.is_group) {
+        return {
+          id: conversation.id,
+          name: conversation.name || 'Группа',
+          avatarUrl: null,
+          isGroup: true,
+        };
+      }
+
+      const partnerIdInConversation = (allParts || []).find(
+        (part) => part.conversation_id === conversation.id && part.user_id !== user.id,
+      )?.user_id;
+
+      const profile = partnerIdInConversation ? profileMap.get(partnerIdInConversation) : null;
+
+      return {
+        id: conversation.id,
+        name: profile?.display_name || profile?.username || 'Неизвестный контакт',
+        avatarUrl: profile?.avatar_url || null,
+        isGroup: false,
+      };
+    });
+
+    setForwardTargets(
+      targets.sort((a, b) => {
+        if (a.id === conversationId) return -1;
+        if (b.id === conversationId) return 1;
+        return a.name.localeCompare(b.name, 'ru');
+      }),
+    );
+  };
+
+  const openForwardDialog = (msg: Message) => {
+    setForwardMessage(msg);
+    setForwardSearch('');
+    setForwardDialogOpen(true);
+  };
+
+  const forwardToConversation = async (targetConversationId: string) => {
+    if (!user || !forwardMessage || isForwarding) return;
+
+    setIsForwarding(true);
+
+    try {
+      await supabase.from('messages').insert({
+        conversation_id: targetConversationId,
+        sender_id: user.id,
+        message_type: forwardMessage.message_type,
+        content: forwardMessage.message_type === 'text' ? forwardMessage.content : null,
+        file_url: forwardMessage.file_url,
+        file_name: forwardMessage.file_name,
+        reply_to_id: null,
+      } as any);
+
+      toast.success('Сообщение переслано');
+      setForwardDialogOpen(false);
+      setForwardMessage(null);
+    } catch {
+      toast.error('Не удалось переслать сообщение');
+    } finally {
+      setIsForwarding(false);
+    }
+  };
+
   const startEdit = (msg: Message) => {
     setEditingMessage(msg);
     setEditText(msg.content || '');
