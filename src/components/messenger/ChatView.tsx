@@ -60,6 +60,11 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [editText, setEditText] = useState('');
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [forwardMessage, setForwardMessage] = useState<Message | null>(null);
+  const [forwardDialogOpen, setForwardDialogOpen] = useState(false);
+  const [forwardTargets, setForwardTargets] = useState<ForwardTarget[]>([]);
+  const [forwardSearch, setForwardSearch] = useState('');
+  const [isForwarding, setIsForwarding] = useState(false);
   const [readByMap, setReadByMap] = useState<Map<string, string[]>>(new Map());
   const [participantNames, setParticipantNames] = useState<Map<string, string>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
