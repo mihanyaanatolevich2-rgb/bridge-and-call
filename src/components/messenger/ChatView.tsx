@@ -704,6 +704,9 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
               <Reply className="h-4 w-4" /> Ответить
             </ContextMenuItem>
           )}
+          <ContextMenuItem onClick={() => openForwardDialog(msg)} className="gap-2">
+            <Forward className="h-4 w-4" /> Переслать
+          </ContextMenuItem>
           {isOwn && msg.message_type === 'text' && (
             <ContextMenuItem onClick={() => startEdit(msg)} className="gap-2">
               <Edit2 className="h-4 w-4" /> Редактировать
