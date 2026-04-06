@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { usePushSubscription } from '@/hooks/usePushSubscription';
 import { supabase } from '@/integrations/supabase/client';
 import Auth from './Auth';
 import ChatList from '@/components/messenger/ChatList';
