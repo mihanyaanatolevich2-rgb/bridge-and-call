@@ -21,6 +21,39 @@ const Index = () => {
     return () => clearInterval(interval);
   }, [user]);
 
+  // In-app browser notifications when tab is not focused
+  useEffect(() => {
+    if (!user) return;
+    if (!('Notification' in window)) return;
+
+    const channel = supabase
+      .channel(`notif-bell-${user.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${user.id}`,
+      }, (payload) => {
+        const n = payload.new as any;
+        // Show browser notification if tab is not focused
+        if (document.hidden && Notification.permission === 'granted') {
+          const notif = new Notification(n.title || 'Новое сообщение', {
+            body: n.body || '',
+            icon: '/icons/icon-192x192.png',
+            tag: n.conversation_id || 'general',
+          });
+          notif.onclick = () => {
+            window.focus();
+            if (n.conversation_id) setSelectedChat(n.conversation_id);
+            notif.close();
+          };
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">

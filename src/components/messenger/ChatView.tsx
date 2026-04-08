@@ -406,13 +406,16 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
   };
 
   const forwardMessage = async (msg: Message) => {
-    if (msg.content) {
-      try {
-        await navigator.clipboard.writeText(msg.content);
-        toast.success('Сообщение скопировано — вставьте в нужный чат');
-      } catch {
-        toast.error('Не удалось скопировать');
-      }
+    const textToCopy = msg.content || msg.file_url || '';
+    if (!textToCopy) {
+      toast.error('Нечего копировать');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      toast.success(msg.file_url ? 'Ссылка на файл скопирована — вставьте в нужный чат' : 'Сообщение скопировано — вставьте в нужный чат');
+    } catch {
+      toast.error('Не удалось скопировать');
     }
   };
 
@@ -642,7 +645,7 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
                 <Edit2 className="h-4 w-4" /> Редактировать
             </ContextMenuItem>
             )}
-            {msg.content && (
+            {(msg.content || msg.file_url) && (
               <ContextMenuItem onClick={() => forwardMessage(msg)} className="gap-2">
                 <Forward className="h-4 w-4" /> Переслать
               </ContextMenuItem>
