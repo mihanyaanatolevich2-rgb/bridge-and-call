@@ -27,17 +27,19 @@ export function usePushSubscription() {
         const registration = await navigator.serviceWorker.register('/sw-push.js');
         await navigator.serviceWorker.ready;
 
-        let subscription = await registration.pushManager.getSubscription();
-
-        if (!subscription) {
-          const permission = await Notification.requestPermission();
-          if (permission !== 'granted') return;
-
-          subscription = await registration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as BufferSource,
-          });
+        // Unsubscribe old subscription if exists (in case VAPID key changed)
+        const existing = await registration.pushManager.getSubscription();
+        if (existing) {
+          await existing.unsubscribe();
         }
+
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') return;
+
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as BufferSource,
+        });
 
         const subJson = subscription.toJSON();
         const endpoint = subJson.endpoint!;
@@ -45,14 +47,18 @@ export function usePushSubscription() {
         const auth = subJson.keys!.auth!;
 
         // Upsert subscription
-        const { data: existing } = await supabase
+        const { data: existingRow } = await supabase
           .from('push_subscriptions')
           .select('id')
           .eq('user_id', user.id)
           .eq('endpoint', endpoint)
           .maybeSingle();
 
-        if (!existing) {
+        if (existingRow) {
+          await supabase.from('push_subscriptions')
+            .update({ p256dh, auth })
+            .eq('id', existingRow.id);
+        } else {
           await supabase.from('push_subscriptions').insert({
             user_id: user.id,
             endpoint,
