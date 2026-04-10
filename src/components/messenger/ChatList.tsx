@@ -156,6 +156,11 @@ const ChatList = ({ selectedChat, onSelectChat }: ChatListProps) => {
     window.dispatchEvent(new Event('wallpaper-changed'));
   }, [customWallpaper]);
 
+  useEffect(() => {
+    localStorage.setItem('app-wallpaper-color', wallpaperColor);
+    window.dispatchEvent(new Event('wallpaper-changed'));
+  }, [wallpaperColor]);
+
   // Save max chars
   useEffect(() => {
     localStorage.setItem('msg-max-chars', String(maxChars));
