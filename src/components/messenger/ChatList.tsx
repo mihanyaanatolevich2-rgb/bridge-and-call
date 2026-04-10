@@ -105,6 +105,9 @@ const ChatList = ({ selectedChat, onSelectChat }: ChatListProps) => {
   const [customWallpaper, setCustomWallpaper] = useState(() => {
     return localStorage.getItem('app-wallpaper-custom') || '';
   });
+  const [wallpaperColor, setWallpaperColor] = useState(() => {
+    return localStorage.getItem('app-wallpaper-color') || '';
+  });
 
   // Load my profile
   useEffect(() => {
