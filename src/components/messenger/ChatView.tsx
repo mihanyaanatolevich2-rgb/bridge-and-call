@@ -601,7 +601,7 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
           <ContextMenuTrigger>
             <div
               id={`msg-${msg.id}`}
-              className={`flex transition-all duration-300 msg-animate ${isOwn ? 'justify-end' : 'justify-start'}`}
+              className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
             >
               <div className={`max-w-[75%] rounded-2xl px-4 py-2 relative ${isOwn ? 'message-own rounded-br-md' : 'message-other rounded-bl-md'} ${pinned ? 'ring-1 ring-primary/30' : ''}`}>
                 {pinned && (
