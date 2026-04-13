@@ -117,9 +117,7 @@ const ChatList = ({ selectedChat, onSelectChat }: ChatListProps) => {
   });
 
   // Saved messages conversation ID
-  const [savedConvId, setSavedConvId] = useState<string | null>(() => {
-    return localStorage.getItem('saved-messages-conv-id');
-  });
+  const [savedConvId, setSavedConvId] = useState<string | null>(null);
 
   // Weather
   const [weatherCity, setWeatherCity] = useState(() => localStorage.getItem('weather-city') || 'Moscow');
@@ -191,13 +189,24 @@ const ChatList = ({ selectedChat, onSelectChat }: ChatListProps) => {
   }, [weatherCity]);
 
   const getWeatherEmoji = (code: number): string => {
-    if (code === 113) return '☀️';
-    if (code === 116) return '⛅';
+    const hour = new Date().getHours();
+    const isNight = hour < 6 || hour >= 21;
+    const isEvening = hour >= 18 && hour < 21;
+    const isMorning = hour >= 6 && hour < 10;
+
+    // Clear sky - time-dependent
+    if (code === 113) {
+      if (isNight) return '🌙';
+      if (isEvening) return '🌇';
+      if (isMorning) return '🌅';
+      return '☀️';
+    }
+    if (code === 116) return isNight ? '☁️' : '⛅';
     if (code === 119 || code === 122) return '☁️';
     if ([176, 263, 266, 293, 296, 299, 302, 305, 308, 311, 314, 317, 353, 356, 359].includes(code)) return '🌧️';
     if ([179, 182, 185, 227, 230, 320, 323, 326, 329, 332, 335, 338, 350, 362, 365, 368, 371, 374, 377, 392, 395].includes(code)) return '🌨️';
     if ([200, 386, 389].includes(code)) return '⛈️';
-    return '🌤️';
+    return isNight ? '🌙' : '🌤️';
   };
 
   const saveCity = () => {
@@ -211,25 +220,62 @@ const ChatList = ({ selectedChat, onSelectChat }: ChatListProps) => {
   // Create or get saved messages conversation
   useEffect(() => {
     if (!user) return;
-    const existing = localStorage.getItem('saved-messages-conv-id');
-    if (existing) {
-      setSavedConvId(existing);
-      return;
-    }
-    // Create a self-conversation
     (async () => {
-      const { data: conv, error: convErr } = await supabase
+      // Check localStorage first
+      const cached = localStorage.getItem(`saved-conv-${user.id}`);
+      if (cached) {
+        // Verify it still exists
+        const { data } = await supabase.from('conversations').select('id').eq('id', cached).single();
+        if (data) {
+          setSavedConvId(cached);
+          return;
+        }
+        localStorage.removeItem(`saved-conv-${user.id}`);
+      }
+
+      // Find existing: conversations where user is only participant and name is Избранное
+      const { data: myParts } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id')
+        .eq('user_id', user.id);
+      
+      if (myParts?.length) {
+        for (const p of myParts) {
+          const { data: conv } = await supabase
+            .from('conversations')
+            .select('id, name')
+            .eq('id', p.conversation_id)
+            .single();
+          if (conv?.name === '⭐ Избранное') {
+            // Check it's a solo conversation
+            const { count } = await supabase
+              .from('conversation_participants')
+              .select('id', { count: 'exact', head: true })
+              .eq('conversation_id', conv.id);
+            if (count === 1) {
+              localStorage.setItem(`saved-conv-${user.id}`, conv.id);
+              setSavedConvId(conv.id);
+              return;
+            }
+          }
+        }
+      }
+
+      // Create new saved messages conversation
+      const { data: newConv, error } = await supabase
         .from('conversations')
         .insert({ name: '⭐ Избранное', is_group: false })
         .select('id')
         .single();
-      if (convErr || !conv) return;
+      if (error || !newConv) return;
+      
       await supabase.from('conversation_participants').insert({
-        conversation_id: conv.id,
+        conversation_id: newConv.id,
         user_id: user.id,
       });
-      localStorage.setItem('saved-messages-conv-id', conv.id);
-      setSavedConvId(conv.id);
+      
+      localStorage.setItem(`saved-conv-${user.id}`, newConv.id);
+      setSavedConvId(newConv.id);
     })();
   }, [user]);
 
