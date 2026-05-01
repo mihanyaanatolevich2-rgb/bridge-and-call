@@ -385,6 +385,27 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
     return () => { supabase.removeChannel(channel); };
   }, [conversationId]);
 
+  // Realtime: conversation name/avatar updates
+  useEffect(() => {
+    if (!conversationId) return;
+    const channel = supabase
+      .channel(`conv-${conversationId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'conversations',
+        filter: `id=eq.${conversationId}`,
+      }, (payload) => {
+        const n = payload.new as any;
+        if (n.is_group) {
+          if (typeof n.name === 'string') setGroupName(n.name || 'Группа');
+          setGroupAvatarUrl(n.avatar_url || null);
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [conversationId]);
+
   // Listen for incoming calls
   useEffect(() => {
     if (!user || isGroup) return;
