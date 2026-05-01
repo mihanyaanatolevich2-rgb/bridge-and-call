@@ -485,6 +485,7 @@ const ChatList = ({ selectedChat, onSelectChat }: ChatListProps) => {
         name = '⭐ Избранное';
       } else if (isGroup) {
         name = conv?.name || 'Группа';
+        avatarUrl = (conv as any)?.avatar_url || null;
       } else {
         const others = (convPartsMap.get(convId) || []).filter(id => id !== user.id);
         if (others.length > 0) {
