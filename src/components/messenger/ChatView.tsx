@@ -18,6 +18,7 @@ import {
   DialogContent,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import GroupInfoDialog from './GroupInfoDialog';
 
 interface Message {
   id: string;
