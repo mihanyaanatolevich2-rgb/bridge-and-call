@@ -988,6 +988,14 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
           )}
         </DialogContent>
       </Dialog>
+
+      {isGroup && (
+        <GroupInfoDialog
+          open={showGroupInfo}
+          onOpenChange={setShowGroupInfo}
+          conversationId={conversationId}
+        />
+      )}
     </div>
   );
 };
