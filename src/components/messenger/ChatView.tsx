@@ -946,7 +946,7 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
         </div>
       ) : (
         <div className="flex items-center gap-2 border-t border-border px-4 py-3">
-          <input ref={fileInputRef} type="file" onChange={handleFileUpload} className="hidden" accept="image/*,video/*,.pdf,.doc,.docx,.txt,.zip" />
+          <input ref={fileInputRef} type="file" multiple onChange={handleFileUpload} className="hidden" accept="image/*,video/*,.pdf,.doc,.docx,.txt,.zip" />
           <Button type="button" variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="text-muted-foreground hover:text-primary shrink-0">
             <Paperclip className="h-5 w-5" />
           </Button>
