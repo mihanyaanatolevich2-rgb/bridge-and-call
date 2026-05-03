@@ -115,10 +115,14 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
   const setupPeerConnection = useCallback(async () => {
     if (!user) return null;
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: isVideo,
-    });
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: isVideo });
+    } catch (error) {
+      if (!isVideo) throw error;
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      setIsVideoOff(true);
+    }
     localStreamRef.current = stream;
     if (localVideoRef.current) localVideoRef.current.srcObject = stream;
 
@@ -145,6 +149,12 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
       if (pc.iceConnectionState === 'failed') {
         // Try ICE restart
         pc.restartIce();
+        if (isCaller && pc.signalingState === 'stable') {
+          pc.createOffer({ iceRestart: true }).then(async (offer) => {
+            await pc.setLocalDescription(offer);
+            await sendSignal('offer', { sdp: offer.sdp, type: offer.type, isVideo });
+          }).catch(() => undefined);
+        }
       }
       if (pc.iceConnectionState === 'disconnected') {
         // Wait a bit before ending
@@ -184,6 +194,27 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
       });
       await pc.setLocalDescription(offer);
       await sendSignal('offer', { sdp: offer.sdp, type: offer.type, isVideo });
+
+      for (let i = 0; i < 60 && !remoteDescSetRef.current && !endedRef.current; i++) {
+        const { data: answers } = await supabase
+          .from('call_signals')
+          .select('*')
+          .eq('conversation_id', conversationId)
+          .eq('receiver_id', user.id)
+          .eq('signal_type', 'answer')
+          .eq('call_id', callIdRef.current as any)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        const answer = answers?.[0] as any;
+        if (answer && pc.signalingState === 'have-local-offer') {
+          await pc.setRemoteDescription(new RTCSessionDescription(answer.signal_data));
+          remoteDescSetRef.current = true;
+          await flushCandidates();
+          break;
+        }
+        await new Promise(r => setTimeout(r, 500));
+      }
     } catch (err) {
       console.error('Failed to start call:', err);
       onEnd();
@@ -204,6 +235,7 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
           .eq('conversation_id', conversationId)
           .eq('receiver_id', user.id)
           .eq('signal_type', 'offer')
+          .eq('call_id', callIdRef.current as any)
           .order('created_at', { ascending: false })
           .limit(1);
 
