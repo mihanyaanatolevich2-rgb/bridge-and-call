@@ -212,11 +212,11 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
           .eq('conversation_id', conversationId)
           .eq('receiver_id', user.id)
           .eq('signal_type', 'answer')
-          .eq('call_id', callIdRef.current as any)
+          .eq('call_id', callIdRef.current)
           .order('created_at', { ascending: false })
           .limit(1);
 
-        const answer = answers?.[0] as any;
+        const answer = (answers as unknown as CallSignalRow[] | null)?.[0];
         if (answer && pc.signalingState === 'have-local-offer') {
           await pc.setRemoteDescription(new RTCSessionDescription(answer.signal_data));
           remoteDescSetRef.current = true;
@@ -237,7 +237,7 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
       if (!pc || !user) return;
 
       // Poll for offer with retry
-      let offer: any = null;
+      let offer: CallSignalRow | null = null;
       for (let i = 0; i < 10; i++) {
         const { data: signals } = await supabase
           .from('call_signals')
@@ -245,7 +245,7 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
           .eq('conversation_id', conversationId)
           .eq('receiver_id', user.id)
           .eq('signal_type', 'offer')
-          .eq('call_id', callIdRef.current as any)
+          .eq('call_id', callIdRef.current)
           .order('created_at', { ascending: false })
           .limit(1);
 
@@ -282,7 +282,8 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
       if (iceCandidates) {
         for (const ic of iceCandidates) {
           try {
-            await pc.addIceCandidate(new RTCIceCandidate((ic.signal_data as any).candidate));
+            const candidate = (ic.signal_data as { candidate?: RTCIceCandidateInit }).candidate;
+            if (candidate) await pc.addIceCandidate(new RTCIceCandidate(candidate));
           } catch { /* ignore */ }
         }
       }
@@ -304,7 +305,7 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
         table: 'call_signals',
         filter: `receiver_id=eq.${user.id}`,
       }, async (payload) => {
-        const signal = payload.new as any;
+        const signal = payload.new as CallSignalRow;
         if (signal.conversation_id !== conversationId) return;
         if (signal.call_id && signal.call_id !== callIdRef.current) return;
         const pc = pcRef.current;
