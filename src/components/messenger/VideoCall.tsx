@@ -296,6 +296,7 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
       }, async (payload) => {
         const signal = payload.new as any;
         if (signal.conversation_id !== conversationId) return;
+        if (signal.call_id && signal.call_id !== callIdRef.current) return;
         const pc = pcRef.current;
         if (!pc && signal.signal_type !== 'hang-up') return;
 
