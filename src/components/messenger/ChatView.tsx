@@ -502,6 +502,10 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || !user) return;
+    if (isChannel && !canPostInChannel) {
+      toast.error('В канале публиковать может только создатель или админ');
+      return;
+    }
 
     const content = input.trim();
     setInput('');
@@ -539,6 +543,11 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0 || !user) return;
+    if (isChannel && !canPostInChannel) {
+      toast.error('В канале публиковать может только создатель или админ');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
 
     setUploading(true);
 
@@ -622,6 +631,24 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
   };
 
   const cancelReply = () => { setReplyTo(null); };
+
+  const sendComment = async (messageId: string) => {
+    const text = (commentInputs[messageId] || '').trim();
+    if (!text || !user) return;
+    const { error } = await (supabase.from as any)('channel_comments').insert({
+      message_id: messageId,
+      conversation_id: conversationId,
+      user_id: user.id,
+      content: text,
+    });
+    if (error) {
+      toast.error('Комментарий не отправлен');
+      return;
+    }
+    setCommentInputs(prev => ({ ...prev, [messageId]: '' }));
+    setOpenComments(prev => new Set([...prev, messageId]));
+    loadComments();
+  };
 
   const downloadFile = async (url: string, filename: string) => {
     try {
