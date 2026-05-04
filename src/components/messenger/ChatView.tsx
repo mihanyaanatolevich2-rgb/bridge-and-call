@@ -231,12 +231,7 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
       setChannelVisibility(((conv as any)?.channel_visibility || null) as 'public' | 'private' | null);
 
       if (channel) {
-        const { data: adminRows } = await supabase
-          .from('group_admins')
-          .select('user_id')
-          .eq('conversation_id', conversationId)
-          .eq('user_id', user.id);
-        setCanPostInChannel((conv as any)?.created_by === user.id || Boolean(adminRows?.length));
+        setCanPostInChannel((conv as any)?.created_by === user.id);
       } else {
         setCanPostInChannel(true);
       }
