@@ -209,13 +209,28 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
 
       const { data: conv } = await supabase
         .from('conversations')
-        .select('name, is_group, avatar_url')
+        .select('name, is_group, is_channel, channel_visibility, avatar_url, created_by')
         .eq('id', conversationId)
         .single();
 
+      const channel = Boolean((conv as any)?.is_channel);
+      setIsChannel(channel);
+      setChannelVisibility(((conv as any)?.channel_visibility || null) as 'public' | 'private' | null);
+
+      if (channel) {
+        const { data: adminRows } = await supabase
+          .from('group_admins')
+          .select('user_id')
+          .eq('conversation_id', conversationId)
+          .eq('user_id', user.id);
+        setCanPostInChannel((conv as any)?.created_by === user.id || Boolean(adminRows?.length));
+      } else {
+        setCanPostInChannel(true);
+      }
+
       if (conv?.is_group) {
         setIsGroup(true);
-        setGroupName(conv.name || 'Группа');
+        setGroupName(conv.name || (channel ? 'Канал' : 'Группа'));
         setGroupAvatarUrl((conv as any).avatar_url || null);
         const { data: parts } = await supabase
           .from('conversation_participants')
@@ -242,6 +257,8 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
       }
 
       setIsGroup(false);
+      setGroupName('');
+      setGroupAvatarUrl(null);
       const { data } = await supabase
         .from('conversation_participants')
         .select('user_id')
