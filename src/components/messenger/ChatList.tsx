@@ -519,7 +519,13 @@ const ChatList = ({ selectedChat, onSelectChat }: ChatListProps) => {
         isSavedMessages: isSaved,
         unreadCount: unreadMap.get(convId) || 0,
       };
-    }).filter(c => c.participantName !== 'Unknown' || c.isGroup || c.isSavedMessages);
+    }).filter(c => c.participantName !== 'Unknown' || c.isGroup || c.isSavedMessages)
+      .filter(c => {
+        const hiddenAt = hiddenMap.get(c.id);
+        if (!hiddenAt) return true;
+        // re-show if a new message arrived after hiding
+        return c.lastMessageAt && new Date(c.lastMessageAt) > new Date(hiddenAt);
+      });
 
     // Sort: saved messages always first, then by last message
     chatItems.sort((a, b) => {
