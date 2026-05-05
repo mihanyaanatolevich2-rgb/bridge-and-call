@@ -732,6 +732,11 @@ const ChatList = ({ selectedChat, onSelectChat }: ChatListProps) => {
               <ContextMenuItem onClick={() => clearChat(chat.id)} className="gap-2 text-destructive">
                 <Trash2 className="h-4 w-4" /> Очистить чат
               </ContextMenuItem>
+              {!chat.isSavedMessages && (
+                <ContextMenuItem onClick={() => deleteChatForMe(chat.id)} className="gap-2 text-destructive">
+                  <Trash2 className="h-4 w-4" /> Удалить чат у себя
+                </ContextMenuItem>
+              )}
             </ContextMenuContent>
           </ContextMenu>
         ))}
