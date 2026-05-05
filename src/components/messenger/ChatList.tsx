@@ -571,7 +571,7 @@ const ChatList = ({ selectedChat, onSelectChat }: ChatListProps) => {
       conversation_id: convId,
       hidden_at: new Date().toISOString(),
     }, { onConflict: 'user_id,conversation_id' });
-    if (selectedChat === convId) onSelectChat('');
+    if (selectedChat === convId) onSelectChat(null);
     setChats(prev => prev.filter(c => c.id !== convId));
     toast.success('Чат удалён у вас');
   };
