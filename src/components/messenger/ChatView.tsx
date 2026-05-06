@@ -68,7 +68,7 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
   const [input, setInput] = useState('');
-  const [recordMode, setRecordMode] = useState<'voice' | 'circle'>('voice');
+  
   const [partnerName, setPartnerName] = useState('');
   const [partnerId, setPartnerId] = useState('');
   const [partnerLastSeen, setPartnerLastSeen] = useState<string | null>(null);
