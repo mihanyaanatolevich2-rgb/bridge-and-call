@@ -700,7 +700,15 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
   const isOnline = partnerLastSeen ? (new Date().getTime() - new Date(partnerLastSeen).getTime()) < 120000 : false;
 
   const displayName = isGroup ? groupName : partnerName;
-  const visibleMessages = messages.filter(m => !deletedIds.has(m.id) && !m.deleted_for_all);
+  const visibleMessages = useMemo(
+    () => messages.filter(m => !deletedIds.has(m.id) && !m.deleted_for_all),
+    [messages, deletedIds]
+  );
+  const messagesById = useMemo(() => {
+    const m = new Map<string, Message>();
+    for (const msg of messages) m.set(msg.id, msg);
+    return m;
+  }, [messages]);
 
   const getReplyMessage = (replyId: string | null | undefined): Message | undefined => {
     if (!replyId) return undefined;
