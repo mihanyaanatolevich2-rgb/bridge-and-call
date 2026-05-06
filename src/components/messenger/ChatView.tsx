@@ -712,7 +712,7 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
 
   const getReplyMessage = (replyId: string | null | undefined): Message | undefined => {
     if (!replyId) return undefined;
-    return messages.find(m => m.id === replyId);
+    return messagesById.get(replyId);
   };
 
   const getSenderName = (senderId: string) => {
