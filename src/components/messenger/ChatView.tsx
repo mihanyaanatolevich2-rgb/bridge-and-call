@@ -1,9 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Send, Paperclip, Phone, Video, ArrowLeft, FileIcon, Edit2, Trash2, TrashIcon, X, Check, CheckCheck, Reply, Download, Forward, Copy, Pin, PinOff, MessageCircle, Lock, Mic, Circle } from 'lucide-react';
-import VoiceRecorder from './VoiceRecorder';
-import VideoCircleRecorder from './VideoCircleRecorder';
+import { Send, Paperclip, Phone, Video, ArrowLeft, FileIcon, Edit2, Trash2, TrashIcon, X, Check, CheckCheck, Reply, Download, Forward, Copy, Pin, PinOff, MessageCircle, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import VideoCall from './VideoCall';
@@ -70,7 +68,7 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
   const [input, setInput] = useState('');
-  const [recordMode, setRecordMode] = useState<'voice' | 'circle'>('voice');
+  
   const [partnerName, setPartnerName] = useState('');
   const [partnerId, setPartnerId] = useState('');
   const [partnerLastSeen, setPartnerLastSeen] = useState<string | null>(null);
@@ -702,11 +700,19 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
   const isOnline = partnerLastSeen ? (new Date().getTime() - new Date(partnerLastSeen).getTime()) < 120000 : false;
 
   const displayName = isGroup ? groupName : partnerName;
-  const visibleMessages = messages.filter(m => !deletedIds.has(m.id) && !m.deleted_for_all);
+  const visibleMessages = useMemo(
+    () => messages.filter(m => !deletedIds.has(m.id) && !m.deleted_for_all),
+    [messages, deletedIds]
+  );
+  const messagesById = useMemo(() => {
+    const m = new Map<string, Message>();
+    for (const msg of messages) m.set(msg.id, msg);
+    return m;
+  }, [messages]);
 
   const getReplyMessage = (replyId: string | null | undefined): Message | undefined => {
     if (!replyId) return undefined;
-    return messages.find(m => m.id === replyId);
+    return messagesById.get(replyId);
   };
 
   const getSenderName = (senderId: string) => {
@@ -1105,25 +1111,9 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
               disabled={uploading}
               className="min-w-0 flex-1 rounded-xl bg-secondary px-4 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-primary"
             />
-            {input.trim() ? (
-              <Button type="submit" size="icon" className="gradient-primary text-primary-foreground shrink-0 rounded-xl">
-                <Send className="h-4 w-4" />
-              </Button>
-            ) : recordMode === 'voice' ? (
-              <div className="flex items-center gap-1 shrink-0">
-                <Button type="button" variant="ghost" size="icon" onClick={() => setRecordMode('circle')} className="text-muted-foreground hover:text-primary shrink-0" title="Переключить на видеокружок">
-                  <Circle className="h-5 w-5" />
-                </Button>
-                <VoiceRecorder conversationId={conversationId} />
-              </div>
-            ) : (
-              <div className="flex items-center gap-1 shrink-0">
-                <Button type="button" variant="ghost" size="icon" onClick={() => setRecordMode('voice')} className="text-muted-foreground hover:text-primary shrink-0" title="Переключить на голосовое">
-                  <Mic className="h-5 w-5" />
-                </Button>
-                <VideoCircleRecorder conversationId={conversationId} />
-              </div>
-            )}
+            <Button type="submit" size="icon" disabled={!input.trim()} className="gradient-primary text-primary-foreground shrink-0 rounded-xl">
+              <Send className="h-4 w-4" />
+            </Button>
           </form>
         </div>
       )}
