@@ -162,10 +162,16 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
 
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: isVideo });
+      stream = initialStream || await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: isVideo,
+      });
     } catch (error) {
       if (!isVideo) throw error;
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: false,
+      });
       setIsVideoOff(true);
     }
     localStreamRef.current = stream;
@@ -202,12 +208,18 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
         }
       }
       if (pc.iceConnectionState === 'disconnected') {
-        // Wait a bit before ending
         setTimeout(() => {
-          if (pcRef.current?.iceConnectionState === 'disconnected') {
-            hangUp();
+          if (pcRef.current?.iceConnectionState === 'disconnected' && !relayRestartedRef.current) {
+            relayRestartedRef.current = true;
+            pc.restartIce();
+            if (isCaller && pc.signalingState === 'stable') {
+              pc.createOffer({ iceRestart: true }).then(async (offer) => {
+                await pc.setLocalDescription(offer);
+                await sendSignal('offer', { sdp: offer.sdp, type: offer.type, isVideo, iceRestart: true });
+              }).catch(() => undefined);
+            }
           }
-        }, 5000);
+        }, 2500);
       }
     };
 
@@ -219,7 +231,7 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
     };
 
     return pc;
-  }, [user, isVideo, sendSignal, hangUp]);
+  }, [user, initialStream, isVideo, sendSignal, isCaller]);
 
   const startAsCaller = useCallback(async () => {
     try {
