@@ -193,6 +193,7 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
     if (isCaller) {
       await restartIceWithOffer(reason);
     } else {
+      relayRestartedRef.current = true;
       await sendSignal('ice-restart-needed', { reason });
     }
   }, [isCaller, restartIceWithOffer, sendSignal]);
