@@ -171,6 +171,28 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
     pendingCandidatesRef.current = [];
   }, []);
 
+  const restartIceWithOffer = useCallback(async (reason: string) => {
+    const pc = pcRef.current;
+    if (!pc || !isCaller || pc.signalingState !== 'stable' || endedRef.current) return;
+    if (iceRestartAttemptsRef.current >= 3) return;
+
+    iceRestartAttemptsRef.current += 1;
+    relayRestartedRef.current = true;
+    pc.restartIce();
+    const offer = await pc.createOffer({ iceRestart: true, offerToReceiveAudio: true, offerToReceiveVideo: isVideo });
+    await pc.setLocalDescription(offer);
+    await sendSignal('offer', { sdp: offer.sdp, type: offer.type, isVideo, iceRestart: true, reason });
+  }, [isCaller, isVideo, sendSignal]);
+
+  const requestConnectionRepair = useCallback(async (reason: string) => {
+    if (endedRef.current) return;
+    if (isCaller) {
+      await restartIceWithOffer(reason);
+    } else {
+      await sendSignal('ice-restart-needed', { reason });
+    }
+  }, [isCaller, restartIceWithOffer, sendSignal]);
+
   const fetchMissedIceCandidates = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase
