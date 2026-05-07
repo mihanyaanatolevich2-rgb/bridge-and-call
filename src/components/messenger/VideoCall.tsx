@@ -38,6 +38,7 @@ const getSignalCandidate = (data: unknown): RTCIceCandidateInit | null => {
 };
 
 const ICE_SERVERS: RTCConfiguration = {
+  iceTransportPolicy: 'relay',
   iceServers: [
     { urls: 'stun:stun.relay.metered.ca:80' },
     { urls: 'stun:openrelay.metered.ca:80' },
@@ -62,6 +63,11 @@ const ICE_SERVERS: RTCConfiguration = {
     },
     {
       urls: 'turns:global.relay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turns:global.relay.metered.ca:443',
       username: 'openrelayproject',
       credential: 'openrelayproject',
     },
@@ -106,6 +112,11 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const remoteDescSetRef = useRef(false);
   const relayRestartedRef = useRef(false);
+  const iceRestartAttemptsRef = useRef(0);
+  const audioStatsTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastInboundAudioBytesRef = useRef(0);
+  const lastRepairRequestAtRef = useRef(0);
+  const connectedAtRef = useRef(0);
   const callIdRef = useRef(callId || crypto.randomUUID());
 
   const sendSignal = useCallback(async (type: string, data: object) => {
@@ -121,12 +132,17 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
   }, [user, conversationId, partnerId]);
 
   const cleanup = useCallback(() => {
+    if (audioStatsTimerRef.current) clearInterval(audioStatsTimerRef.current);
     localStreamRef.current?.getTracks().forEach(t => t.stop());
     pcRef.current?.close();
     pcRef.current = null;
     localStreamRef.current = null;
     remoteDescSetRef.current = false;
     pendingCandidatesRef.current = [];
+    audioStatsTimerRef.current = null;
+    lastInboundAudioBytesRef.current = 0;
+    lastRepairRequestAtRef.current = 0;
+    connectedAtRef.current = 0;
   }, []);
 
   const hangUp = useCallback(() => {
@@ -158,6 +174,29 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
     }
     pendingCandidatesRef.current = [];
   }, []);
+
+  const restartIceWithOffer = useCallback(async (reason: string) => {
+    const pc = pcRef.current;
+    if (!pc || !isCaller || pc.signalingState !== 'stable' || endedRef.current) return;
+    if (iceRestartAttemptsRef.current >= 3) return;
+
+    iceRestartAttemptsRef.current += 1;
+    relayRestartedRef.current = true;
+    pc.restartIce();
+    const offer = await pc.createOffer({ iceRestart: true, offerToReceiveAudio: true, offerToReceiveVideo: isVideo });
+    await pc.setLocalDescription(offer);
+    await sendSignal('offer', { sdp: offer.sdp, type: offer.type, isVideo, iceRestart: true, reason });
+  }, [isCaller, isVideo, sendSignal]);
+
+  const requestConnectionRepair = useCallback(async (reason: string) => {
+    if (endedRef.current) return;
+    if (isCaller) {
+      await restartIceWithOffer(reason);
+    } else {
+      relayRestartedRef.current = true;
+      await sendSignal('ice-restart-needed', { reason });
+    }
+  }, [isCaller, restartIceWithOffer, sendSignal]);
 
   const fetchMissedIceCandidates = useCallback(async () => {
     if (!user) return;
@@ -212,6 +251,8 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
     pc.ontrack = (e) => {
       if (remoteVideoRef.current && e.streams[0]) {
         remoteVideoRef.current.srcObject = e.streams[0];
+        remoteVideoRef.current.volume = 1;
+        remoteVideoRef.current.play().catch(() => undefined);
         setStatus('connected');
       }
     };
@@ -219,26 +260,12 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
     pc.oniceconnectionstatechange = () => {
       console.log('ICE state:', pc.iceConnectionState);
       if (pc.iceConnectionState === 'failed') {
-        // Try ICE restart
-        pc.restartIce();
-        if (isCaller && pc.signalingState === 'stable') {
-          pc.createOffer({ iceRestart: true }).then(async (offer) => {
-            await pc.setLocalDescription(offer);
-            await sendSignal('offer', { sdp: offer.sdp, type: offer.type, isVideo });
-          }).catch(() => undefined);
-        }
+        requestConnectionRepair('ice-failed').catch(() => undefined);
       }
       if (pc.iceConnectionState === 'disconnected') {
         setTimeout(() => {
           if (pcRef.current?.iceConnectionState === 'disconnected' && !relayRestartedRef.current) {
-            relayRestartedRef.current = true;
-            pc.restartIce();
-            if (isCaller && pc.signalingState === 'stable') {
-              pc.createOffer({ iceRestart: true }).then(async (offer) => {
-                await pc.setLocalDescription(offer);
-                await sendSignal('offer', { sdp: offer.sdp, type: offer.type, isVideo, iceRestart: true });
-              }).catch(() => undefined);
-            }
+            requestConnectionRepair('ice-disconnected').catch(() => undefined);
           }
         }, 2500);
       }
@@ -248,11 +275,29 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
       console.log('Connection state:', pc.connectionState);
       if (pc.connectionState === 'connected') {
         setStatus('connected');
+        if (!connectedAtRef.current) connectedAtRef.current = Date.now();
+        if (!audioStatsTimerRef.current) {
+          audioStatsTimerRef.current = setInterval(async () => {
+            if (endedRef.current || pcRef.current !== pc || pc.connectionState !== 'connected') return;
+            const stats = await pc.getStats();
+            let inboundBytes = 0;
+            stats.forEach((report) => {
+              if (report.type === 'inbound-rtp' && report.kind === 'audio') inboundBytes += report.bytesReceived || 0;
+            });
+            const hadPrevious = lastInboundAudioBytesRef.current > 0;
+            const isSilent = hadPrevious && inboundBytes <= lastInboundAudioBytesRef.current;
+            lastInboundAudioBytesRef.current = inboundBytes;
+            if (Date.now() - connectedAtRef.current > 5000 && isSilent && Date.now() - lastRepairRequestAtRef.current > 8000) {
+              lastRepairRequestAtRef.current = Date.now();
+              requestConnectionRepair('no-audio-bytes').catch(() => undefined);
+            }
+          }, 4000);
+        }
       }
     };
 
     return pc;
-  }, [user, initialStream, isVideo, sendSignal, isCaller]);
+  }, [user, initialStream, isVideo, sendSignal, requestConnectionRepair]);
 
   const startAsCaller = useCallback(async () => {
     try {
@@ -387,6 +432,8 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
           } else if (signal.signal_type === 'ice-candidate') {
             const candidate = getSignalCandidate(signal.signal_data);
             if (candidate) await addIceCandidate(candidate);
+          } else if (signal.signal_type === 'ice-restart-needed') {
+            await restartIceWithOffer('peer-requested-repair');
           } else if (signal.signal_type === 'hang-up') {
             if (!endedRef.current) {
               endedRef.current = true;
@@ -402,7 +449,7 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [user, conversationId, cleanup, onEnd, isCaller, sendSignal, addIceCandidate, flushCandidates, fetchMissedIceCandidates]);
+  }, [user, conversationId, cleanup, onEnd, isCaller, sendSignal, addIceCandidate, flushCandidates, fetchMissedIceCandidates, restartIceWithOffer]);
 
   // Start call
   useEffect(() => {
