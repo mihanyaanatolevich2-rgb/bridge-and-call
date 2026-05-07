@@ -793,23 +793,17 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
                   <p className="text-sm text-foreground whitespace-pre-wrap break-words overflow-hidden" style={{ maxWidth: `${maxCharsPerLine}ch` }}>{msg.content}</p>
                 )}
                 {msg.message_type === 'image' && msg.file_url && (
-                  <div className="relative group">
+                  <div className="relative">
                     <img src={msg.file_url} alt={msg.file_name || 'image'} className="rounded-lg cursor-pointer object-cover" style={{ maxWidth: '240px', maxHeight: '240px' }} onClick={() => setZoomImage(msg.file_url)} />
-                    <Button variant="secondary" size="icon" className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); downloadFile(msg.file_url!, msg.file_name || 'image.jpg'); }}>
-                      <Download className="h-3.5 w-3.5" />
-                    </Button>
                   </div>
                 )}
                 {(msg.message_type === 'video' || msg.message_type === 'video_circle') && msg.file_url && (
-                  <div className="relative group">
+                  <div className="relative">
                     <video src={msg.file_url} controls className={`max-w-full ${msg.message_type === 'video_circle' ? 'rounded-full w-48 h-48 object-cover' : 'rounded-lg'}`} />
-                    <Button variant="secondary" size="icon" className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); downloadFile(msg.file_url!, msg.file_name || 'video.mp4'); }}>
-                      <Download className="h-3.5 w-3.5" />
-                    </Button>
                   </div>
                 )}
-                {msg.message_type === 'voice' && msg.file_url && (
-                  <audio src={msg.file_url} controls className="max-w-full" />
+                {(msg.message_type === 'voice' || msg.message_type === 'audio') && msg.file_url && (
+                  <AudioMessage url={msg.file_url} fileName={msg.file_name} />
                 )}
                 {msg.message_type === 'file' && msg.file_url && (
                   <div className="flex items-center gap-2">
@@ -817,9 +811,6 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
                       <FileIcon className="h-4 w-4 shrink-0" />
                       <span className="text-sm truncate">{msg.file_name || 'Файл'}</span>
                     </a>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-primary" onClick={() => downloadFile(msg.file_url!, msg.file_name || 'file')}>
-                      <Download className="h-3.5 w-3.5" />
-                    </Button>
                   </div>
                 )}
                 <div className="flex items-center gap-1 mt-1 justify-end">
@@ -852,6 +843,11 @@ const ChatView = ({ conversationId, onBack }: ChatViewProps) => {
             {(msg.content || msg.file_url) && (
               <ContextMenuItem onClick={() => forwardMessage(msg)} className="gap-2">
                 <Forward className="h-4 w-4" /> Переслать
+              </ContextMenuItem>
+            )}
+            {msg.file_url && (
+              <ContextMenuItem onClick={() => downloadFile(msg.file_url!, msg.file_name || msg.message_type)} className="gap-2">
+                <Download className="h-4 w-4" /> Скачать
               </ContextMenuItem>
             )}
             <ContextMenuSeparator />
