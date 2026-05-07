@@ -38,6 +38,7 @@ const getSignalCandidate = (data: unknown): RTCIceCandidateInit | null => {
 };
 
 const ICE_SERVERS: RTCConfiguration = {
+  iceTransportPolicy: 'relay',
   iceServers: [
     { urls: 'stun:stun.relay.metered.ca:80' },
     { urls: 'stun:openrelay.metered.ca:80' },
@@ -62,6 +63,11 @@ const ICE_SERVERS: RTCConfiguration = {
     },
     {
       urls: 'turns:global.relay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turns:global.relay.metered.ca:443',
       username: 'openrelayproject',
       credential: 'openrelayproject',
     },
@@ -106,6 +112,9 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const remoteDescSetRef = useRef(false);
   const relayRestartedRef = useRef(false);
+  const iceRestartAttemptsRef = useRef(0);
+  const audioStatsTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastInboundAudioBytesRef = useRef(0);
   const callIdRef = useRef(callId || crypto.randomUUID());
 
   const sendSignal = useCallback(async (type: string, data: object) => {
@@ -121,12 +130,15 @@ const VideoCall = ({ conversationId, partnerId, partnerName, isVideo, isCaller, 
   }, [user, conversationId, partnerId]);
 
   const cleanup = useCallback(() => {
+    if (audioStatsTimerRef.current) clearInterval(audioStatsTimerRef.current);
     localStreamRef.current?.getTracks().forEach(t => t.stop());
     pcRef.current?.close();
     pcRef.current = null;
     localStreamRef.current = null;
     remoteDescSetRef.current = false;
     pendingCandidatesRef.current = [];
+    audioStatsTimerRef.current = null;
+    lastInboundAudioBytesRef.current = 0;
   }, []);
 
   const hangUp = useCallback(() => {
